@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform">
+<meta http-equiv="Cache-Control" content="no-siteapp">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css">
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css">
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="deep learning,automatic differentiation,optimization,">
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="大家对自动微分可能比较陌生, 不过对深度学习应该是耳熟能详的吧. 深度学习属于机器学习中的一个热门分支, 其基本的套路是定义一个损失函数, 然后通过梯度下降的方式来最小化损失函数, 从而对整个模型进行优化. 但是在计算机中如何具体的计算对应的梯度呢?  这方面不乏相应的研究, 其中自动微分就是一种现今广泛应用的技术.">
+<meta name="keywords" content="deep learning,automatic differentiation,optimization">
+<meta property="og:type" content="article">
+<meta property="og:title" content="自动微分">
+<meta property="og:url" content="http://yoursite.com/2019/05/15/自动微分/index.html">
+<meta property="og:site_name" content="MenglingD&#39;s blog">
+<meta property="og:description" content="大家对自动微分可能比较陌生, 不过对深度学习应该是耳熟能详的吧. 深度学习属于机器学习中的一个热门分支, 其基本的套路是定义一个损失函数, 然后通过梯度下降的方式来最小化损失函数, 从而对整个模型进行优化. 但是在计算机中如何具体的计算对应的梯度呢?  这方面不乏相应的研究, 其中自动微分就是一种现今广泛应用的技术.">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http://yoursite.com/2019/05/15/自动微分/autodiff_err.png">
+<meta property="og:image" content="http://yoursite.com/2019/05/15/自动微分/expression_swell.png">
+<meta property="og:image" content="http://yoursite.com/2019/05/15/自动微分/computational_graph.png">
+<meta property="og:image" content="http://yoursite.com/2019/05/15/自动微分/AD_forward_mode.png">
+<meta property="og:image" content="http://yoursite.com/2019/05/15/自动微分/AD_backward_mode.png">
+<meta property="og:updated_time" content="2019-05-16T10:38:15.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="自动微分">
+<meta name="twitter:description" content="大家对自动微分可能比较陌生, 不过对深度学习应该是耳熟能详的吧. 深度学习属于机器学习中的一个热门分支, 其基本的套路是定义一个损失函数, 然后通过梯度下降的方式来最小化损失函数, 从而对整个模型进行优化. 但是在计算机中如何具体的计算对应的梯度呢?  这方面不乏相应的研究, 其中自动微分就是一种现今广泛应用的技术.">
+<meta name="twitter:image" content="http://yoursite.com/2019/05/15/自动微分/autodiff_err.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2019/05/15/自动微分/">
+
+
+
+
+
+  <title>自动微分 | MenglingD's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-CN">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">MenglingD's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">走出舒适区</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br>
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br>
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br>
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br>
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br>
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/15/自动微分/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="MenglingD">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="MenglingD's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">自动微分</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-05-15T19:33:30+08:00">
+                2019-05-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/computer-vision/" itemprop="url" rel="index">
+                    <span itemprop="name">computer vision</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2019/05/15/自动微分/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/2019/05/15/自动微分/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2019/05/15/自动微分/" class="leancloud_visitors" data-flag-title="自动微分">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">Visitors&#58;</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+             </span>
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>大家对自动微分可能比较陌生, 不过对深度学习应该是耳熟能详的吧.
+深度学习属于机器学习中的一个热门分支, 其基本的套路是定义一个损失函数,
+然后通过梯度下降的方式来最小化损失函数, 从而对整个模型进行优化.
+但是在计算机中如何具体的计算对应的梯度呢?  这方面不乏相应的研究,
+其中自动微分就是一种现今广泛应用的技术.</p>
+<a id="more"></a>
+<p>注: 本文内容主要参照<a href="#reference">&#91;1&#93;</a>和<a href="#reference">&#91;2&#93;</a>.</p>
+<h1 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h1><p>在计算机统计学中, 导数起到了相当重要的作用.
+例如在机器学习中基于梯度的优化方式: 梯度下降需要计算相关参数的一阶导数, 然后对其更新; 牛顿法需要计算二阶导数;
+因此如何在计算机中有效并且准确的计算出导数成了一个基础的, 且通用的问题.</p>
+<p>在计算机中计算导数的方法通常可分为四类:</p>
+<ul>
+<li>手动微分, 手动计算表达式导数, 然后进行编码, 当然这是不明智的方法, 且不灵活.</li>
+<li>数值微分, 根据导数定义, 使用有限的数值差分去逼近导数真值. 该方法存在着舍去误差和截断误差, 且对于大规模导数计算不实际.</li>
+<li>符号微分, 在计算机代数系统中手动编写函数表达式, 由其来计算对应的导数符号形式.
+当然仅支持系统中提供的表达式的梯度代数形式的计算, 而且随着函数表达式的复杂度的增加, 会导致其导数的代数表达式爆炸.</li>
+<li>自动微分, 计算中间变量的梯度, 然后使用链式求导法则求得各个变量的梯度, 也是本文讲解的微分方式.</li>
+</ul>
+<h1 id="与其他微分比较"><a href="#与其他微分比较" class="headerlink" title="与其他微分比较"></a>与其他微分比较</h1><h2 id="数值微分"><a href="#数值微分" class="headerlink" title="数值微分"></a>数值微分</h2><p>自动微分不是数值微分. 数值微分是数值计算中, 通过有效的差值计算来获得导数的近似计算.
+对于函数$f(x)$, 其导数定义为:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+f^{'}(x) = \lim \limits_{\Delta x \rightarrow 0} \frac{f(x+\Delta x) - f(x)}{\Delta x}
+\end{equation}</script><p>因此可以用一个很小的$h$去替代$\Delta x \rightarrow 0$近似的拟合函数导数. 可以得到:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+f^{'}(x) \approx \frac{f(x+h) - f(x)}{h}
+\end{equation}</script><p>这是根据导数定义来的, 所以对于多元的函数也可以使用同样方式去拟合导数.
+数值微分计算导数在编程上很容易实现, 不过对于多元函数其计算量也不是很小, 它需要$O(n)$的时间复杂度.
+并且还需要小心选择$\Delta x$的大小, 过大的话导致近似导数值与真实导数误差较大, 即截断误差较大.
+过小的$\Delta x$超出计算机浮点存储范围又会增大舍去误差. 截断误差是因为数值微分(又叫有限差分)使用差分来近似替代真实导数, 舍去了误差影响.
+对于$f(x+h)$做泰勒展开有:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+f(x+h) = f(x) + hf^{'}(x) + \frac{1}{2} h^2 f^{''}(\xi)
+\end{equation}</script><p>带入式(2)可得:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\begin{aligned}
+\frac{f(x+h) - f(x)}{h} &= \frac{f(x) + hf^{'}(x) + \frac{1}{2} h^2 f^{''}(\xi) - f(x)}{h} \\
+&= f^{'}(x) + \frac{1}{2}hf^{''}(\xi) \\
+&= f^{'}(x) + o(h)
+\end{aligned}
+\end{equation}</script><p>其中$o(h)$我们将其定义为泰勒展开余项. 为了减少截断误差, 即减小余项, 我们可以使用中心差分近似:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+f^{'}(x) \approx \frac{f(x+h) - f(x-h)}{2h}
+\end{equation}</script><p>对于$f(x+h)$和$f(x-h)$进行3阶泰勒展开有:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\begin{aligned}
+f(x+h) &= f(x) + hf^{'}(x) + \frac{1}{2} h^2 f^{''}(x) + \frac{1}{6}h^3f^{'''}(\xi) \\
+f(x-h) &= f(x) + (-h)f^{'}(x) + \frac{1}{2} (-h)^2 f^{''}(x) + \frac{1}{6}(-h)^3f^{'''}(\xi)
+\end{aligned}
+\end{equation}</script><p>将(6)带入(5)则有:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\frac{f(x+h) - f(x-h)}{2h} = f^{'}(x) + o(h^2)
+\end{equation}</script><p>这样将截断误差减小, 不过相应的舍去误差成了主要的影响.
+为了更加准确的逼近真实导数, 需要选取更小的$h$, 由于计算机存储浮点数的精度有效,
+导致导数计算时存在着舍去误差. 舍去误差与截断误差是此消彼长的, 随着$h$的大小变化, 这两种误差如下图所示:</p>
+<p><img src="autodiff_err.png" alt></p>
+<center>图1 截断误差和舍入误差</center>
+
+<p>当然还有很多研究如何减少这两种误差, 不过数值微分最大的缺点在于计算量, 求n维输入的导数, 其时间复杂度为$o(n)$.
+由于深度学习有大量的参数, 数值微分显然不合适.</p>
+<h2 id="符号微分"><a href="#符号微分" class="headerlink" title="符号微分"></a>符号微分</h2><p>符号微分是借助计算机线性系统, 例如Mathematica, Maxima, Maple以及机器学习框架Theano等,
+将表达式组织成一定的数据结构, 比如表达式树. 最后使用求导规则, 将微分计算表达为对应的代数形式. 例如:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\begin{aligned}
+&\frac{d}{dx}(f(x)+g(x)) \rightarrow \frac{d}{dx}f(x) + \frac{d}{dx}g(x) \\
+&\frac{d}{dx}(f(x)g(x)) \rightarrow (\frac{d}{dx}f(x))g(x) + f(x)(\frac{d}{dx}g(x))
+\end{aligned}
+\end{equation}</script><p>随着表达式的形式变得复杂, 对应的微分的代数形式也会变得相当复杂, 这个问题称为<em>expression swell</em>, 如下图所示:</p>
+<p><img src="expression_swell.png" alt></p>
+<center>图2 expression sweel</center>
+
+<p>符号微分虽然能够准确的求得对应表达式的代数形式, 不过表达式中存在许多重复的部分,
+例如上标$n=3$时, $(1-2x)$在表达式中出现了多次, 这样会导致大量的重复计算.
+而且表达式越复杂, 其导数的代数形式也会更加复杂, 实际上我们并不关心导数的具体代数形式, 而是其实际值.
+这两个缺点同样限制了符号微分在具有大量参数的通过梯度来优化的机器学习应用中.</p>
+<h2 id="自动微分"><a href="#自动微分" class="headerlink" title="自动微分"></a>自动微分</h2><p>所有的数值计算都可以看做是由一系列导数形式已知的元素操作组成, 对这些元素操作按照链式求导法则依次计算微分, 最终得到整个表达式的微分.
+例如我们计算$f(x_1, x_2)=ln(x_1)+x_1x_2 - sin(x_2)$, 可以将其表示为下图的计算图:</p>
+<p><img src="computational_graph.png" alt></p>
+<center>图3 $f(x_1, x_2)=ln(x_1)+x_1x_2 - sin(x_2)$计算图</center>
+
+<p>上图中每一个节点都是一个导数和计算形式已知的元素操作, 例如$v<em>2$节点表示对于两个输入$v</em>{-1}$和$v<em>0$的乘法操作$v</em>{-1} \cdot v_0$.
+中间变量的使用, 可以大大简化导数的表达式形式, 只要按照一定的求值顺序(拓扑顺序, 或者反着的拓扑顺序),
+将节点计算的梯度进行累加, 最终能够得到整个表达式的所有微分值.</p>
+<p>计算图是实现自动微分的一种重要手段, 不过自动微分最重要的本质是使用中间变量(即元素的操作)和链式求导法则,
+任何有关数值计算的都逻辑都可转换成一个基于数值计算的序列, 因此对于分支, 循环, 递归等都可使用自动微分来计算梯度.
+在实际计算的过程中, 我们不仅能够得到准确的梯度值, 而且不需要关心梯度具体的代数形式.</p>
+<h1 id="自动微分的主要形式"><a href="#自动微分的主要形式" class="headerlink" title="自动微分的主要形式"></a>自动微分的主要形式</h1><p>自动微分使用链式求导法则将表达式看做是一个复合函数, 例如$h(x) = f(g(x))$. 那么:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\frac{dh(x)}{dx} = \frac{df}{dg} \frac{dg(x)}{dx}
+\end{equation}</script><p>根据是先已知$\frac{df}{dg}$的微分代数形式和$\frac{dg(x)}{dx}$具体梯度数值,
+还是已知$\frac{df}{dg}$的具体梯度数值和$\frac{dg(x)}{dx}$的代数形式, 自动微分可分为前向模式和后向模型.</p>
+<h2 id="前向模式"><a href="#前向模式" class="headerlink" title="前向模式"></a>前向模式</h2><p>如图3所示, 我们定义节点$v_i$对于$x_1$的偏导为:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\dot{v_i} = \frac{\partial v_i}{\partial x_1}
+\end{equation}</script><p>前向求导的过程如图4所示:</p>
+<p><img src="AD_forward_mode.png" alt></p>
+<center>图4 前向模型</center>
+
+<p>使用雅克比矩阵, 很容易将自动微分扩展到多维的情况. 在前向过程中, 对于第l层节点来说,
+可以看成函数$f_l: \mathbb{R}^n \rightarrow \mathbb{R}^m$, 其中输入为相互独立的$a_i^{l-1}$, 输出为对应的$a_j^l$.
+那么这一层对于输入的导数可以表示为:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\textbf{J}_{f_l^{l-1}} = \left[ \begin{matrix}
+\frac{\partial a_1^{l}}{\partial a_1^{l-1}} &\cdots &\frac{\partial a_1^{l}}{\partial a_n^{l-1}} \\
+\vdots &\ddots &\vdots \\
+\frac{\partial a_m^{l}}{\partial a_1^{l-1}} &\cdots &\frac{\partial a_m^{l}}{\partial a_n^{l-1}}
+\end{matrix}
+\right]
+\end{equation}</script><p>在前向计算节点$a^l$对输入$x$的偏导时, 此时已经知道节点$a^{l-1}$对输入$x$的偏导,
+$a^{l-1}$的值和$a^l$对$a^{l-1}$的偏导代数形式, 因此我们可以计算出$\textbf{J}_{f_l^{l-1}}$.
+根据链式求导法则我们进一步可以求出$a^{l}$对输入$x$的偏导:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\textbf{J}_{f_l^x} = \textbf{J}_{f_l^{l-1}} \times \textbf{J}_{f_{l-1}^1}
+\end{equation}</script><p>为了区分1和$l$, 这里用$x$替代了1. 所以实际上前向模式为多个雅克比矩阵连乘.</p>
+<h2 id="后向模式"><a href="#后向模式" class="headerlink" title="后向模式"></a>后向模式</h2><p>后向模式即已知$l$层节点对输出$y$的偏导数, 求$l-1$层节点对输出$y$的偏导数, 不断向前最终抵达输入节点, 从而求得所有的微分值.
+例如图3的后向模式如图5所示:</p>
+<p><img src="AD_backward_mode.png" alt></p>
+<center>图5 后向模式</center>
+
+<p>后向模式同样可以表示为多个雅克比矩阵连乘的形式. 对于输出$y$, 此时知道$a^l$对$y$的偏导数,
+$a^{l-1}$的具体数值和$a^{l}$对$a^{l-1}$的微分代数形式, 从而可求得$y$关于$a^{l-1}$的偏导数:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\textbf{J}_{f_{l-1}^y} = \textbf{J}_{f_l^y} \times \textbf{J}_{f_{l-1}^l}
+\end{equation}</script><p>在求$\textbf{J}<em>{f</em>{l-1}^l}$的时候, 需要知道$a_{l-1}$的具体值,
+所以后向模式其实是分两个阶段的, 首先前向计算中间变量的值, 然后后向计算梯度.</p>
+<h2 id="前向和后向的选择"><a href="#前向和后向的选择" class="headerlink" title="前向和后向的选择"></a>前向和后向的选择</h2><p>既然后向模式需要先<strong>前向计算</strong>中间变量的值, 那么它相对于<strong>前向模式</strong>的优势在哪里呢?
+前面说了, 自动微分可以用雅克比矩阵来表示, 实际上及自动微分就是一连串的雅克比矩阵连乘:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\textbf{J}_{f_x^y} = \textbf{J}_{f_x^2} \times \textbf{J}_{f_2^3} \cdots \textbf{J}_{f_{L-1}^y}
+\end{equation}</script><p>因此微分的计算可以看成$L-1$个矩阵乘法计算, 为了简化计算, 输入的雅克比矩阵形状是$n \times k$,
+输出的雅克比矩阵形状是$n \times m$, 中间的雅克比矩阵shape都是$k \times k$, 且中间只有一个雅克比矩阵.
+简化后的自定微分可表示为:</p>
+<script type="math/tex; mode=display">
+\begin{equation}
+\textbf{J}_{f_x^y} = \textbf{J}_{f_x^2} \times \textbf{J}_{f_2^3} \times \textbf{J}_{f_{3}^y}
+\end{equation}</script><p>前向模式是由左向右做矩阵乘法, 而后向模式是从右向左做矩阵乘法.
+对于矩阵$A<em>{m, k}$, $B</em>{k, n}$乘法的时间复杂度为$O(mkn)$.
+那么前向模式的时间复杂度为$O(nkk + nkm)$, 后向模式的时间复杂度为$O(mkk + mkn)$.
+因此在选择前向模式还是后向模式的时候, 主要看输入和输出的规模比较.
+在机器学习中, 通常是$n &gt;&gt; m$, 后向模式比前向模式运用更为广泛.</p>
+<h1 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h1><p>在实现自动微分的过程中, 通常需要考虑实现的性能, 包括计算量和内存耗用. 当然还需要考虑一些数值计算的问题,
+比如计算数学表达式$\log(1+x)$, $\sqrt{x^2+y^2+z^2}$和$\tan^{-1}(\frac{y}{x})$需要使用$log1p(x)$,
+$hypot(x, hypot(y, z))$以及$atan2(y, x)$来表示.</p>
+<p>自动微分因为其重要性, 所以有众多的开源代码. 其实现按照优化方式可以分为在内存管理方面进行优化,
+计算图优化, 数值计算优化等, 不过这些优化都是相互影响, 所以这里还是采用&#91;1&#93;中的分类方式, 按照使用方式来分类;</p>
+<ul>
+<li>Elemental Libraries: 使用自动微分库暴露的接口, 手动的将算法分解成能够自动微分的原子操作.</li>
+<li>Compilers and Source Code Transformation: 实现一个编译器或者源码转换其, 能够自动将算法分解成能够自动微分的原子操作, 从而进行自动微分.</li>
+<li>Operator Overloading: 将算法中的一些操作编写成对应的运算符, 这些运算符需要提供前向计算和反向梯度计算, 从而能够依据链式求导法则进行自动微分.</li>
+</ul>
+<p>在&#91;1&#93;中一大串AD的实现库, 这里挑选几个文档丰富, 时间较新的库:</p>
+<ul>
+<li><a href="https://projects.coin-or.org/ADOL-C" target="_blank" rel="noopener">ADOL-C</a>: 源码中的文档对于整个项目讲解得相当详细.</li>
+<li><a href="https://github.com/HIPS/autograd" target="_blank" rel="noopener">autograd</a>: <a href="https://dash.harvard.edu/bitstream/handle/1/33493599/MACLAURIN-DISSERTATION-2016.pdf?sequence=4&amp;isAllowed=y" target="_blank" rel="noopener">Modeling, Inference and Optimization with Composable Differentiable Procedures</a>文中有一节详细介绍了该项目的设计.</li>
+<li><a href="https://github.com/google/tangent" target="_blank" rel="noopener">tangent</a>: google开发的纯python开发的微分调试器, 值得一看.</li>
+</ul>
+<p>类似<em>pytorch</em>, <em>Chainer</em>以及<em>Ceres Solver</em>等库虽然有详细的文档, 不过考虑性能以及一些扩展性, 例如分布式计算, 深度学习的一些特性等.
+对于仅仅想弄清楚自动微分的过程的人来说, 这些库都过于庞大, 所以并没有罗列到上面.</p>
+<p>上面介绍了在实现自动微分中应该考虑的问题, 以及一些解决方案. 在下一篇博客中, 我们会实现一个简单的自动微分框架, 能够进行常用的微分计算.</p>
+<h1 id="reference"><a href="#reference" class="headerlink" title="reference"></a>reference</h1><ul>
+<li>[1] <a href="https://arxiv.org/pdf/1502.05767.pdf" target="_blank" rel="noopener">Automatic Differentiation in Machine Learning: a Survey</a></li>
+<li>[2] <a href="http://txshi-mt.com/2018/10/04/NMT-Tutorial-3b-Autodiff/" target="_blank" rel="noopener">NMT Tutorial 3扩展b. 自动微分</a></li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/deep-learning/" rel="tag"># deep learning</a>
+          
+            <a href="/tags/automatic-differentiation/" rel="tag"># automatic differentiation</a>
+          
+            <a href="/tags/optimization/" rel="tag"># optimization</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/19/ch2-管理现场/" rel="prev" title="ch2_线程管理">
+                ch2_线程管理 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/avatar.gif" alt="MenglingD">
+            
+              <p class="site-author-name" itemprop="name">MenglingD</p>
+              <p class="site-description motion-element" itemprop="description">自律</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/MenglingD" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#引言"><span class="nav-number">1.</span> <span class="nav-text">引言</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#与其他微分比较"><span class="nav-number">2.</span> <span class="nav-text">与其他微分比较</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#数值微分"><span class="nav-number">2.1.</span> <span class="nav-text">数值微分</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#符号微分"><span class="nav-number">2.2.</span> <span class="nav-text">符号微分</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#自动微分"><span class="nav-number">2.3.</span> <span class="nav-text">自动微分</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#自动微分的主要形式"><span class="nav-number">3.</span> <span class="nav-text">自动微分的主要形式</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#前向模式"><span class="nav-number">3.1.</span> <span class="nav-text">前向模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#后向模式"><span class="nav-number">3.2.</span> <span class="nav-text">后向模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#前向和后向的选择"><span class="nav-number">3.3.</span> <span class="nav-text">前向和后向的选择</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#实现"><span class="nav-number">4.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#reference"><span class="nav-number">5.</span> <span class="nav-text">reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">MenglingD</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Muse</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  <script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail,link';
+    guest = guest.split(',').filter(item=>{
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: 'zqtRmOt73x8IrPcgUg6Rh2wE-gzGzoHsz',
+        appKey: 'cgVqUDRppgE0oQEozzGtQLc1',
+        placeholder: '请在此输入您的留言',
+        avatar:'mm',
+        guest_info:guest,
+        pageSize:'10' || 10,
+    });
+  </script>
+
+
+
+  
+
+
+
+
+
+  
+
+  
+  <script src="https://cdn1.lncld.net/static/js/av-core-mini-0.6.4.js"></script>
+  <script>AV.initialize("wYECyCPfrQdHCPaKvbEFCGlh-gzGzoHsz", "LBKtsPxuynsrMxUTebN6VSnA");</script>
+  <script>
+    function showTime(Counter) {
+      var query = new AV.Query(Counter);
+      var entries = [];
+      var $visitors = $(".leancloud_visitors");
+
+      $visitors.each(function () {
+        entries.push( $(this).attr("id").trim() );
+      });
+
+      query.containedIn('url', entries);
+      query.find()
+        .done(function (results) {
+          var COUNT_CONTAINER_REF = '.leancloud-visitors-count';
+
+          if (results.length === 0) {
+            $visitors.find(COUNT_CONTAINER_REF).text(0);
+            return;
+          }
+
+          for (var i = 0; i < results.length; i++) {
+            var item = results[i];
+            var url = item.get('url');
+            var time = item.get('time');
+            var element = document.getElementById(url);
+
+            $(element).find(COUNT_CONTAINER_REF).text(time);
+          }
+          for(var i = 0; i < entries.length; i++) {
+            var url = entries[i];
+            var element = document.getElementById(url);
+            var countSpan = $(element).find(COUNT_CONTAINER_REF);
+            if( countSpan.text() == '') {
+              countSpan.text(0);
+            }
+          }
+        })
+        .fail(function (object, error) {
+          console.log("Error: " + error.code + " " + error.message);
+        });
+    }
+
+    function addCount(Counter) {
+      var $visitors = $(".leancloud_visitors");
+      var url = $visitors.attr('id').trim();
+      var title = $visitors.attr('data-flag-title').trim();
+      var query = new AV.Query(Counter);
+
+      query.equalTo("url", url);
+      query.find({
+        success: function(results) {
+          if (results.length > 0) {
+            var counter = results[0];
+            counter.fetchWhenSave(true);
+            counter.increment("time");
+            counter.save(null, {
+              success: function(counter) {
+                var $element = $(document.getElementById(url));
+                $element.find('.leancloud-visitors-count').text(counter.get('time'));
+              },
+              error: function(counter, error) {
+                console.log('Failed to save Visitor num, with error message: ' + error.message);
+              }
+            });
+          } else {
+            var newcounter = new Counter();
+            /* Set ACL */
+            var acl = new AV.ACL();
+            acl.setPublicReadAccess(true);
+            acl.setPublicWriteAccess(true);
+            newcounter.setACL(acl);
+            /* End Set ACL */
+            newcounter.set("title", title);
+            newcounter.set("url", url);
+            newcounter.set("time", 1);
+            newcounter.save(null, {
+              success: function(newcounter) {
+                var $element = $(document.getElementById(url));
+                $element.find('.leancloud-visitors-count').text(newcounter.get('time'));
+              },
+              error: function(newcounter, error) {
+                console.log('Failed to create');
+              }
+            });
+          }
+        },
+        error: function(error) {
+          console.log('Error:' + error.code + " " + error.message);
+        }
+      });
+    }
+
+    $(function() {
+      var Counter = AV.Object.extend("Counter");
+      if ($('.leancloud_visitors').length == 1) {
+        addCount(Counter);
+      } else if ($('.post-title-link').length > 1) {
+        showTime(Counter);
+      }
+    });
+  </script>
+
+
+
+  
+
+  
+
+  
+  
+
+  
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      });
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      });
+    </script>
+    <script type="text/javascript" src="//cdn.bootcss.com/mathjax/2.7.1/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>
