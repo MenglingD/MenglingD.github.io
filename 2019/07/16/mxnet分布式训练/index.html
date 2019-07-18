@@ -68,7 +68,7 @@
 
 
 
-  <meta name="keywords" content="Hexo, NexT">
+  <meta name="keywords" content="multi-processes,parallelism,deep learning,distributed training,">
 
 
 
@@ -79,16 +79,18 @@
 
 
 
-<meta name="description" content="自律">
-<meta property="og:type" content="website">
-<meta property="og:title" content="MenglingD&#39;s blog">
-<meta property="og:url" content="http://yoursite.com/index.html">
+<meta name="description" content="本文主要介绍mxnet的分布式训练，包括mxnet分布式训练的基本原理和如何进行分布式训练, 以及部分源码分析。mxnet不仅支持单机多卡和支持多机多卡的分布式训练，本文均会有所涉及。">
+<meta name="keywords" content="multi-processes,parallelism,deep learning,distributed training">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mxnet分布式训练">
+<meta property="og:url" content="http://yoursite.com/2019/07/16/mxnet分布式训练/index.html">
 <meta property="og:site_name" content="MenglingD&#39;s blog">
-<meta property="og:description" content="自律">
+<meta property="og:description" content="本文主要介绍mxnet的分布式训练，包括mxnet分布式训练的基本原理和如何进行分布式训练, 以及部分源码分析。mxnet不仅支持单机多卡和支持多机多卡的分布式训练，本文均会有所涉及。">
 <meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-07-17T09:41:56.432Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="MenglingD&#39;s blog">
-<meta name="twitter:description" content="自律">
+<meta name="twitter:title" content="mxnet分布式训练">
+<meta name="twitter:description" content="本文主要介绍mxnet的分布式训练，包括mxnet分布式训练的基本原理和如何进行分布式训练, 以及部分源码分析。mxnet不仅支持单机多卡和支持多机多卡的分布式训练，本文均会有所涉及。">
 
 
 
@@ -118,13 +120,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/">
+  <link rel="canonical" href="http://yoursite.com/2019/07/16/mxnet分布式训练/">
 
 
 
 
 
-  <title>MenglingD's blog</title>
+  <title>mxnet分布式训练 | MenglingD's blog</title>
   
 
 
@@ -143,8 +145,7 @@
     
   
 
-  <div class="container sidebar-position-left 
-  page-home">
+  <div class="container sidebar-position-left page-post-detail">
     <div class="headband"></div>
 
     <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
@@ -247,9 +248,9 @@
         <div class="content-wrap">
           <div id="content" class="content">
             
-  <section id="posts" class="posts-expand">
+
+  <div id="posts" class="posts-expand">
     
-      
 
   
 
@@ -279,9 +280,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2019/07/16/mxnet分布式训练/" itemprop="url">mxnet分布式训练</a></h1>
+          <h1 class="post-title" itemprop="name headline">mxnet分布式训练</h1>
         
 
         <div class="post-meta">
@@ -374,17 +373,64 @@
       
 
       
-        
-          <p>本文主要介绍mxnet的分布式训练，包括mxnet分布式训练的基本原理和如何进行分布式训练,
+        <p>本文主要介绍mxnet的分布式训练，包括mxnet分布式训练的基本原理和如何进行分布式训练,
 以及部分源码分析。mxnet不仅支持单机多卡和支持多机多卡的分布式训练，本文均会有所涉及。</p>
-          <!--noindex-->
-          <div class="post-button text-center">
-            <a class="btn" href="/2019/07/16/mxnet分布式训练/#more" rel="contents">
-              Read more &raquo;
-            </a>
-          </div>
-          <!--/noindex-->
-        
+<a id="more"></a>
+<h1 id="背景介绍"><a href="#背景介绍" class="headerlink" title="背景介绍"></a>背景介绍</h1><h2 id="并行内容"><a href="#并行内容" class="headerlink" title="并行内容"></a>并行内容</h2><p>分布式计算实质上是将一个大任务分解成多个小任务，然后分发到不同的节点上进行计算，最后将任务汇总
+从而充分利用计算资源提高计算效率。总而言之为先分，然后合(map-reduce)。</p>
+<p>在模型的分布式训练中根据分发的内容，可分为数据并行和模型并行两种:</p>
+<ul>
+<li>数据并行：数据并行即将batch数据分发到不同的节点上，而每个节点(对于单机多卡的话，节点可以是一个GPU，对于多机多卡的来说，节点可以是一台服务器)上保存完整的网络参数，然后每个节点计算部分数据。</li>
+<li>模型并行：除了可以将数据分解，还可以将模型参数分解，每个节点保存网络的部分参数，完成网络的部分计算。这就是模型并行。</li>
+</ul>
+<p>对于网络参数较大的模型，单个节点无法存储整个网络参数时，模型并行能够将每个节点的显存占用降低。但是因为网络层的中间结果需要在不同节点之间传递, 会占用较大的网络带宽从而拉低整体的计算效率。所以如今大部分使用的数据并行的方案。</p>
+<h2 id="并行架构"><a href="#并行架构" class="headerlink" title="并行架构"></a>并行架构</h2><p>在分布式训练中一个比较重要的点为如何同步不同节点上的数据和信息。
+按照是否有中心节点可以分为Parameter-Server和Ring All-reduce。</p>
+<p><strong>Parameter-Server</strong></p>
+<p>深度学习模型的训练通常分为如下三个步骤：</p>
+<ol>
+<li>IO模块读取数据</li>
+<li>forward-backward计算网络节点值和梯度</li>
+<li>然后根据不同的优化算法对网络参数进行更新</li>
+</ol>
+<p>在分布式训练中，通常是数据并行，所以1，2步都是分配在不同节点并行计算的。
+那么大部分分布式训练优化的点也都集中在第3步，即”合”的步骤。</p>
+<p>在<em>Parameter-Server</em>这种架构中，使用的也是数据并行的方式。
+它分为Worker, Parameter-Server和Schedule三种processes。其结构如下图所示：</p>
+<p><img src alt="xxxx"></p>
+<p>系统中有多个<em>Worker</em>分别对应着多个设备，每个<em>Worker</em>负责splited data的前向后向，即训练步骤中的1，2步。
+负责计算每轮迭代中一个batch的parameters和对应的梯度值以及一些中间结果。由于每个worker只有一个batch中的部分数据的结果，
+还需要将其汇总到<em>Parameter-Server</em>(并不只有一个)中，进行参数更新，即训练的第3步。然后将更新后的参数再发送到各个<em>Worker</em>进行下一轮的训练。
+而<em>Scheduler</em>则负责<em>Worker</em>和<em>Parameter-Server</em>的调度。在整个集群中只有一个<em>Scheduler</em>。</p>
+<p>这种结构简单、直观、易实现。但是当Worker较多的话，性能瓶颈可能更多的会卡在网络IO上，即使增加<em>Parameter-Server</em>的个数，这个问题还是会存在。</p>
+<p><strong>Ring All-reduce</strong></p>
+<p>另外一种架构则没有中心的<em>Parameter-Server</em>负责参数的更新。其结构为一个连通的环，如下图所示：</p>
+<p><img src alt="xxxx"></p>
+<p>在这种结构中，没有专门的<em>Parameter-Server</em>负责参数的更新，每个节点在环上发送少量参数，通过多次通讯进行参数同步。
+这种结构非本文重点，更多细节见：</p>
+<h2 id="更新策略"><a href="#更新策略" class="headerlink" title="更新策略"></a>更新策略</h2><p>不管是<em>Parameter-Server</em>还是<em>Ring All-reduce</em>，分布式训练更多关注的是如何将计算的梯度同步从而计算更新参数。
+根据参数更新的方式，可以分为同步更新和异步更新。</p>
+<p><strong>同步更新</strong></p>
+<p>在模型训练中，一个batch的数据被分配到不同的节点上进行计算。
+每个节点的计算能力不同，参数更新如果需要等待所有的节点计算完成才进行，那么就是同步更新。</p>
+<p>这种更新方式简单，梯度下降稳定，除了BN等层会有些影响，更加接近于单节点模型训练。但是整个处理的速度受到最慢节点的计算速度的影响。</p>
+<p><strong>异步更新</strong></p>
+<p>异步更新则不需要等待，每个节点计算完之后将梯度进行传递，并立马能够得到更新后的参数。</p>
+<p>这种更新方式batch的迭代速度更快，但是loss下降得就不那么稳定，实现也相对复杂。</p>
+<h1 id="使用mxnet进行分布式训练"><a href="#使用mxnet进行分布式训练" class="headerlink" title="使用mxnet进行分布式训练"></a>使用mxnet进行分布式训练</h1><p>在进行分布式训练之前，我们先看下有那些可能会影响到训练效率的因素:</p>
+<p><strong>硬件</strong>:</p>
+<ul>
+<li>todo</li>
+</ul>
+<p><strong>软件</strong>:</p>
+<ul>
+<li>todo</li>
+</ul>
+<p>本次实验中</p>
+<h2 id="单机多卡"><a href="#单机多卡" class="headerlink" title="单机多卡"></a>单机多卡</h2><h3 id="从零开始多卡训练"><a href="#从零开始多卡训练" class="headerlink" title="从零开始多卡训练"></a>从零开始多卡训练</h3><h3 id="使用symbol-api"><a href="#使用symbol-api" class="headerlink" title="使用symbol api"></a>使用symbol api</h3><h3 id="使用gluon"><a href="#使用gluon" class="headerlink" title="使用gluon"></a>使用gluon</h3><h2 id="多机多卡"><a href="#多机多卡" class="headerlink" title="多机多卡"></a>多机多卡</h2><h3 id="从零开始多卡训练-1"><a href="#从零开始多卡训练-1" class="headerlink" title="从零开始多卡训练"></a>从零开始多卡训练</h3><h3 id="使用symbol-api-1"><a href="#使用symbol-api-1" class="headerlink" title="使用symbol api"></a>使用symbol api</h3><h3 id="使用gluon-1"><a href="#使用gluon-1" class="headerlink" title="使用gluon"></a>使用gluon</h3><h1 id="关键源码分析"><a href="#关键源码分析" class="headerlink" title="关键源码分析"></a>关键源码分析</h1><h1 id="reference"><a href="#reference" class="headerlink" title="reference"></a>reference</h1><ul>
+<li>[1] <a href="https://blog.skymind.ai/distributed-deep-learning-part-1-an-introduction-to-distributed-training-of-neural-networks/" target="_blank" rel="noopener">Distributed Deep Learning, Part 1: An Introduction to Distributed Training of Neural Networks</a></li>
+</ul>
+
       
     </div>
     
@@ -399,354 +445,42 @@
 
     <footer class="post-footer">
       
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/19/ch2-管理线程/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="MenglingD">
-      <meta itemprop="description" content>
-      <meta itemprop="image" content="/images/avatar.jpeg">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="MenglingD's blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2019/05/19/ch2-管理线程/" itemprop="url">ch2_线程管理</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">Posted on</span>
-              
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-05-19T15:44:18+08:00">
-                2019-05-19
-              </time>
-            
-
-            
-
-            
-          </span>
-
+        <div class="post-tags">
           
-            <span class="post-category">
-            
-              <span class="post-meta-divider">|</span>
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">In</span>
-              
-              
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/parallelism/" itemprop="url" rel="index">
-                    <span itemprop="name">parallelism</span>
-                  </a>
-                </span>
-
-                
-                
-              
-            </span>
+            <a href="/tags/multi-processes/" rel="tag"># multi-processes</a>
           
-
+            <a href="/tags/parallelism/" rel="tag"># parallelism</a>
           
-            
-              <span class="post-comments-count">
-                <span class="post-meta-divider">|</span>
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-comment-o"></i>
-                </span>
-                <a href="/2019/05/19/ch2-管理线程/#comments" itemprop="discussionUrl">
-                  <span class="post-comments-count valine-comment-count" data-xid="/2019/05/19/ch2-管理线程/" itemprop="commentCount"></span>
-                </a>
-              </span>
-            
+            <a href="/tags/deep-learning/" rel="tag"># deep learning</a>
           
-
+            <a href="/tags/distributed-training/" rel="tag"># distributed training</a>
           
-          
-             <span id="/2019/05/19/ch2-管理线程/" class="leancloud_visitors" data-flag-title="ch2_线程管理">
-               <span class="post-meta-divider">|</span>
-               <span class="post-meta-item-icon">
-                 <i class="fa fa-eye"></i>
-               </span>
-               
-                 <span class="post-meta-item-text">Visitors&#58;</span>
-               
-                 <span class="leancloud-visitors-count"></span>
-             </span>
-          
-
-          
-
-          
-
-          
-
         </div>
-      </header>
-    
+      
 
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
+      
       
       
 
       
-        
-          <p>最近在学习c++方面的线程, 学习资料为&lt;<c++ concurrency in action>&gt;一书.
-正好学习完第一部分, 即书中的前4章, 就趁热打铁整理下学习过的知识.
-本文主要根据书中第2章整理, 讲解如何启动线程, 以及需要注意的事项.</c++></p>
-          <!--noindex-->
-          <div class="post-button text-center">
-            <a class="btn" href="/2019/05/19/ch2-管理线程/#more" rel="contents">
-              Read more &raquo;
-            </a>
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/19/ch2-管理线程/" rel="next" title="ch2_线程管理">
+                <i class="fa fa-chevron-left"></i> ch2_线程管理
+              </a>
+            
           </div>
-          <!--/noindex-->
-        
-      
-    </div>
-    
-    
-    
 
-    
+          <span class="post-nav-divider"></span>
 
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/15/自动微分/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="MenglingD">
-      <meta itemprop="description" content>
-      <meta itemprop="image" content="/images/avatar.jpeg">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="MenglingD's blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2019/05/15/自动微分/" itemprop="url">自动微分</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
+          <div class="post-nav-prev post-nav-item">
             
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">Posted on</span>
-              
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-05-15T19:33:30+08:00">
-                2019-05-15
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-            <span class="post-category">
-            
-              <span class="post-meta-divider">|</span>
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">In</span>
-              
-              
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/computer-vision/" itemprop="url" rel="index">
-                    <span itemprop="name">computer vision</span>
-                  </a>
-                </span>
-
-                
-                
-              
-            </span>
-          
-
-          
-            
-              <span class="post-comments-count">
-                <span class="post-meta-divider">|</span>
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-comment-o"></i>
-                </span>
-                <a href="/2019/05/15/自动微分/#comments" itemprop="discussionUrl">
-                  <span class="post-comments-count valine-comment-count" data-xid="/2019/05/15/自动微分/" itemprop="commentCount"></span>
-                </a>
-              </span>
-            
-          
-
-          
-          
-             <span id="/2019/05/15/自动微分/" class="leancloud_visitors" data-flag-title="自动微分">
-               <span class="post-meta-divider">|</span>
-               <span class="post-meta-item-icon">
-                 <i class="fa fa-eye"></i>
-               </span>
-               
-                 <span class="post-meta-item-text">Visitors&#58;</span>
-               
-                 <span class="leancloud-visitors-count"></span>
-             </span>
-          
-
-          
-
-          
-
-          
-
+          </div>
         </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
       
 
       
-        
-          <p>大家对自动微分可能比较陌生, 不过对深度学习应该是耳熟能详的吧.
-深度学习属于机器学习中的一个热门分支, 其基本的套路是定义一个损失函数,
-然后通过梯度下降的方式来最小化损失函数, 从而对整个模型进行优化.
-但是在计算机中如何具体的计算对应的梯度呢?  这方面不乏相应的研究,
-其中自动微分就是一种现今广泛应用的技术.</p>
-          <!--noindex-->
-          <div class="post-button text-center">
-            <a class="btn" href="/2019/05/15/自动微分/#more" rel="contents">
-              Read more &raquo;
-            </a>
-          </div>
-          <!--/noindex-->
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
       
     </footer>
   </div>
@@ -756,10 +490,11 @@
   </article>
 
 
-    
-  </section>
 
-  
+    <div class="post-spread">
+      
+    </div>
+  </div>
 
 
           </div>
@@ -767,6 +502,13 @@
 
 
           
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
 
         </div>
         
@@ -787,8 +529,17 @@
       
 
       
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
 
-      <section class="site-overview-wrap sidebar-panel sidebar-panel-active">
+      <section class="site-overview-wrap sidebar-panel">
         <div class="site-overview">
           <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
             
@@ -850,6 +601,22 @@
         </div>
       </section>
 
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#背景介绍"><span class="nav-number">1.</span> <span class="nav-text">背景介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#并行内容"><span class="nav-number">1.1.</span> <span class="nav-text">并行内容</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#并行架构"><span class="nav-number">1.2.</span> <span class="nav-text">并行架构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#更新策略"><span class="nav-number">1.3.</span> <span class="nav-text">更新策略</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#使用mxnet进行分布式训练"><span class="nav-number">2.</span> <span class="nav-text">使用mxnet进行分布式训练</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#单机多卡"><span class="nav-number">2.1.</span> <span class="nav-text">单机多卡</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#从零开始多卡训练"><span class="nav-number">2.1.1.</span> <span class="nav-text">从零开始多卡训练</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用symbol-api"><span class="nav-number">2.1.2.</span> <span class="nav-text">使用symbol api</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用gluon"><span class="nav-number">2.1.3.</span> <span class="nav-text">使用gluon</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#多机多卡"><span class="nav-number">2.2.</span> <span class="nav-text">多机多卡</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#从零开始多卡训练-1"><span class="nav-number">2.2.1.</span> <span class="nav-text">从零开始多卡训练</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用symbol-api-1"><span class="nav-number">2.2.2.</span> <span class="nav-text">使用symbol api</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用gluon-1"><span class="nav-number">2.2.3.</span> <span class="nav-text">使用gluon</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#关键源码分析"><span class="nav-number">3.</span> <span class="nav-text">关键源码分析</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#reference"><span class="nav-number">4.</span> <span class="nav-text">reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
       
 
       
@@ -983,6 +750,10 @@
   
 
   
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
 
   
 
